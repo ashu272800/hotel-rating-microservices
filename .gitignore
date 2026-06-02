@@ -1,7 +1,7 @@
 # Large Binary Files
 *.zip
 *.mp4
-* [Autosaved].pptx
+*\[Autosaved\].pptx
 
 # JMeter Directory
 apache-jmeter-*/
