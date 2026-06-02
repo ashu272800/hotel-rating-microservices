@@ -21,5 +21,5 @@
       "onAutoForward": "ignore"
     }
   },
-  "postCreateCommand": "docker-compose up -d"
+  "postCreateCommand": "chmod +x build-all.sh && ./build-all.sh && docker-compose up -d"
 }
