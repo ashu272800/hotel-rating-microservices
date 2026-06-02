@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # =========================================================================
+  # Databases
+  # =========================================================================
+  mysql-db:
+    image: mysql:8.0
+    container_name: mysql-db
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: microservices
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-db:
+    image: postgres:15
+    container_name: postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_USER: postgres
+      POSTGRES_DB: microservice
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d microservice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb-db:
+    image: mongo:6.0
+    container_name: mongodb-db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =========================================================================
+  # Spring Cloud Infrastructure
+  # =========================================================================
+  service-registry:
+    build:
+      context: ./ServiceRegistry/ServiceRegistry
+      dockerfile: Dockerfile
+    container_name: service-registry
+    ports:
+      - "8761:8761"
+    environment:
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  config-server:
+    build:
+      context: ./ConfigServer/ConfigServer
+      dockerfile: Dockerfile
+    container_name: config-server
+    ports:
+      - "8085:8085"
+    depends_on:
+      service-registry:
+        condition: service_started
+    environment:
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/DurgeshCoder/microservice-tutorial-config
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-registry:8761/eureka
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # =========================================================================
+  # Gateway and Core Services
+  # =========================================================================
+  api-gateway:
+    build:
+      context: ./ApiGateway/ApiGateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8084:8084"
+    depends_on:
+      service-registry:
+        condition: service_started
+      config-server:
+        condition: service_started
+    environment:
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-registry:8761/eureka
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8085
+
+  user-service:
+    build:
+      context: ./UserService/UserService
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+      service-registry:
+        condition: service_started
+      config-server:
+        condition: service_started
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/microservices?createDatabaseIfNotExist=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-registry:8761/eureka
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8085
+
+  hotel-service:
+    build:
+      context: ./HotelService/HotelService
+      dockerfile: Dockerfile
+    container_name: hotel-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      service-registry:
+        condition: service_started
+      config-server:
+        condition: service_started
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/microservice
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-registry:8761/eureka
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8085
+
+  rating-service:
+    build:
+      context: ./RatingService/RatingService
+      dockerfile: Dockerfile
+    container_name: rating-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      mongodb-db:
+        condition: service_healthy
+      service-registry:
+        condition: service_started
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb-db:27017/microservices
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-registry:8761/eureka

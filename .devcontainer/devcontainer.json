@@ -1,0 +1,25 @@
+{
+  "name": "Hotel Rating Microservices Workspace",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest"
+    }
+  },
+  "forwardPorts": [8761, 8085, 8084, 8081, 8082, 8083],
+  "portsAttributes": {
+    "8761": {
+      "label": "Eureka Service Registry Dashboard",
+      "onAutoForward": "notify"
+    },
+    "8084": {
+      "label": "API Gateway Entrance",
+      "onAutoForward": "notify"
+    },
+    "8085": {
+      "label": "Config Server Console",
+      "onAutoForward": "ignore"
+    }
+  },
+  "postCreateCommand": "docker-compose up -d"
+}
